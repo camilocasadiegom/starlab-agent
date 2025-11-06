@@ -1,0 +1,5 @@
+﻿min_dias_vigencia: 30
+ocr_licencia: false
+mensajes:
+  ok: 'Â¡Recibimos tus documentos! Estamos validando.'
+  falta: 'Por favor reenvÃ­a una foto nÃ­tida de tu licencia (frente y dorso).'

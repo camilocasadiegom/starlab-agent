@@ -1,0 +1,7 @@
+﻿.venv/
+__pycache__/
+*.log
+*.zip
+data/
+public/
+logs/
