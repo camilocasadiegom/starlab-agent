@@ -1,13 +1,15 @@
 ﻿services:
   - type: web
-    name: starlinx-protoapp
-    env: python
+    name: starlinx-web
+    runtime: python
+    region: oregon
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn main:app --host 0.0.0.0 --port \
+    healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: ADMIN_KEY
-        value: starlab123
+        sync: false
       - key: SECRET_KEY
-        value: PLEASE-CHANGE-ME-THIS-IS-SECRET
+        generateValue: true
