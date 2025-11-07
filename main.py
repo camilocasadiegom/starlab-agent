@@ -344,3 +344,82 @@ except Exception as _e:
     # No interrumpir la app si falta SQLAlchemy o no hay DB todavía.
     pass
 # ------------------------------------------------------------------------------
+# == STARLINX ADMIN DB ENDPOINTS (idempotente) ==
+from fastapi import HTTPException
+import os, sqlite3
+
+ADMIN_KEY = os.getenv("ADMIN_KEY", "starlab123")
+
+def _get_conn():
+    dburl = os.getenv("DATABASE_URL", "")
+    # Si hay Postgres, úsalo
+    if dburl.startswith("postgres://") or dburl.startswith("postgresql://"):
+        import psycopg
+        return psycopg.connect(dburl)
+    # Fallback sqlite temporal (ej. en Render /tmp)
+    return sqlite3.connect("/tmp/starlinx.db")
+
+@app.get("/admin/db-init")
+def admin_db_init(k: str):
+    if k != ADMIN_KEY:
+        raise HTTPException(status_code=401, detail="no autorizado")
+    con = _get_conn()
+    try:
+        cur = con.cursor()
+        try:
+            # DDL compatible Postgres
+            cur.execute("""
+            CREATE TABLE IF NOT EXISTS registros(
+              id SERIAL PRIMARY KEY,
+              ts TIMESTAMP DEFAULT NOW(),
+              nombre TEXT,
+              documento TEXT,
+              telefono TEXT
+            )
+            """)
+        except Exception:
+            # Fallback sqlite
+            cur.execute("""
+            CREATE TABLE IF NOT EXISTS registros(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              ts TEXT,
+              nombre TEXT,
+              documento TEXT,
+              telefono TEXT
+            )
+            """)
+        con.commit()
+        return {"ok": True, "action": "db-init"}
+    finally:
+        con.close()
+
+@app.get("/admin/db-test")
+def admin_db_test(k: str):
+    if k != ADMIN_KEY:
+        raise HTTPException(status_code=401, detail="no autorizado")
+    con = _get_conn()
+    try:
+        try:
+            ver = con.execute("select version()").fetchone()[0]
+        except Exception:
+            ver = "sqlite/" + sqlite3.sqlite_version
+        return {"ok": True, "version": ver}
+    finally:
+        con.close()
+
+@app.get("/admin/db-count")
+def admin_db_count(k: str):
+    if k != ADMIN_KEY:
+        raise HTTPException(status_code=401, detail="no autorizado")
+    con = _get_conn()
+    try:
+        cur = con.cursor()
+        try:
+            cur.execute("SELECT COUNT(*) FROM registros")
+        except Exception:
+            return {"count": 0, "note": "tabla no existe aún; ejecuta /admin/db-init"}
+        n = cur.fetchone()[0]
+        return {"count": n}
+    finally:
+        con.close()
+# == /STARLINX ADMIN ==
