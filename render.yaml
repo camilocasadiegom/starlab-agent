@@ -1,33 +1,23 @@
-﻿databases:
-  - name: starlinx-postgres
-    plan: free
-    region: oregon
-    postgresMajorVersion: 15
-    databaseName: starlinx
-    user: starlinx
-    diskSizeGB: 1
-
-services:
+﻿services:
   - type: web
     name: starlinx-web
     runtime: python
-    region: oregon
     plan: free
+    region: oregon
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port 
-    healthCheckPath: /health
-    autoDeploy: true
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: ADMIN_KEY
         sync: false
       - key: SECRET_KEY
         generateValue: true
-      # URL pública e interna del Postgres recién creado
       - key: DATABASE_URL
         fromDatabase:
           name: starlinx-postgres
-          property: connectionString
-      - key: DATABASE_INTERNAL_URL
-        fromDatabase:
-          name: starlinx-postgres
           property: internalConnectionString
+
+databases:
+  - name: starlinx-postgres
+    plan: free
+    region: oregon
+    databaseName: starlinx

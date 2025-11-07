@@ -291,3 +291,56 @@ def export_csv(request: Request, k: str | None = None):
 def export_json(request: Request, k: str | None = None):
     require_admin(request, k)
     return JSONResponse(read_rows())
+# --------- [AUTO-ADD] Admin DB utilities (no rompe la UI existente) ----------
+try:
+    import os
+    from fastapi import HTTPException
+    from sqlalchemy import create_engine, text
+
+    _ADMIN_KEY = os.getenv("ADMIN_KEY", "starlab123")
+
+    def _get_engine():
+        url = os.getenv("DATABASE_URL")
+        if not url:
+            raise RuntimeError("DATABASE_URL no definido")
+        return create_engine(url, pool_pre_ping=True)
+
+    def _ensure_table():
+        eng = _get_engine()
+        with eng.begin() as cx:
+            cx.exec_driver_sql("""
+                CREATE TABLE IF NOT EXISTS conductores(
+                    id SERIAL PRIMARY KEY,
+                    timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+                    nombre TEXT NOT NULL,
+                    documento TEXT NOT NULL,
+                    telefono TEXT NOT NULL
+                )
+            """)
+        return True
+
+    @app.get("/admin/db-init")
+    def admin_db_init(k: str):
+        if k != _ADMIN_KEY:
+            raise HTTPException(status_code=401, detail="no autorizado")
+        try:
+            ok = _ensure_table()
+            return {"ok": ok, "msg": "tabla conductores lista"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get("/admin/db-test")
+    def admin_db_test(k: str):
+        if k != _ADMIN_KEY:
+            raise HTTPException(status_code=401, detail="no autorizado")
+        url = os.getenv("DATABASE_URL")
+        if not url:
+            raise HTTPException(status_code=400, detail="DATABASE_URL no está definido")
+        eng = _get_engine()
+        with eng.connect() as c:
+            ver = c.execute(text("select version()")).scalar_one()
+        return {"ok": True, "version": ver}
+except Exception as _e:
+    # No interrumpir la app si falta SQLAlchemy o no hay DB todavía.
+    pass
+# ------------------------------------------------------------------------------
