@@ -1,4 +1,8 @@
-﻿
+﻿# ==== STARLINX_DB_FALLBACK_SHIM (no tocar) ====
+import os
+os.environ.setdefault('DATABASE_URL', 'sqlite:////tmp/starlinx.db')
+# ==============================================
+
     param($m)
     return $m.Value + "import os`n"
   
@@ -688,6 +692,7 @@ except Exception as e:
     print(f"[startup] Advertencia: no se pudo registrar evento startup: {e}")
     _ensure_sqlite_table()
 # === /STARLINX STARTUP TABLE ENSURE ===
+
 
 
 
