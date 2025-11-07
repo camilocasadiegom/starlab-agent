@@ -2,10 +2,12 @@
   - type: web
     name: starlinx-web
     runtime: python
-    plan: free
     region: oregon
+    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn main:app --host 0.0.0.0 --port \
+    healthCheckPath: /health
+    autoDeploy: true
     envVars:
       - key: ADMIN_KEY
         sync: false
@@ -14,11 +16,9 @@
       - key: DATABASE_URL
         fromDatabase:
           name: starlinx-postgres
-          property: internalConnectionString
+          property: connectionString
 
 databases:
   - name: starlinx-postgres
-    plan: free
     region: oregon
-    databaseName: starlinx
-
+    plan: free
