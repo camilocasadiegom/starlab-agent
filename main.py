@@ -613,3 +613,42 @@ def admin_db_count(request: Request, k: str | None = Query(default=None)):
 # === /STARLINX ADMIN SIMPLE ===
 
 
+
+# === STARLINX STARTUP TABLE ENSURE ===
+# Forzar tabla en arranque, usando SQLite en /tmp/starlinx.db
+import os, sqlite3, pathlib
+from contextlib import closing
+
+DB_FILE = "/tmp/starlinx.db"
+
+def _ensure_sqlite_table():
+    try:
+        pathlib.Path("/tmp").mkdir(parents=True, exist_ok=True)
+        with closing(sqlite3.connect(DB_FILE, check_same_thread=False)) as c:
+            c.execute(\"\"\"
+            CREATE TABLE IF NOT EXISTS registros (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              nombre   TEXT,
+              documento TEXT,
+              telefono TEXT,
+              email    TEXT,
+              ciudad   TEXT,
+              vehiculo TEXT,
+              ts       TEXT
+            )
+            \"\"\")
+            c.commit()
+    except Exception as e:
+        # No rompemos el arranque; solo dejamos pista en logs
+        print(f"[startup] tabla registros: {e}")
+
+# FastAPI >=0.95 sugiere lifespan/Events; este decorador funciona en ambas
+try:
+    @app.on_event("startup")
+    def _starlinx_startup_ensure_table():
+        _ensure_sqlite_table()
+except Exception as _e:
+    # Si ya hay un lifespan distinto, llamamos de inmediato (degradado)
+    _ensure_sqlite_table()
+# === /STARLINX STARTUP TABLE ENSURE ===
+
