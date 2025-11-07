@@ -520,3 +520,22 @@ if not _path_registered(app, "/admin/db-count", "GET"):
     def _admin_db_count_alias(request: Request):
         return db_count_fix(request)
 # === /STARLINX ADMIN ALIASES ===
+# === STARLINX ADMIN FORCE OVERRIDE ===
+# Fuerza a que /admin/* llamen a los handlers robustos de /admin/fix/*
+from fastapi import Request
+
+# Nos aseguramos de que existen los fix handlers (db_init_fix, db_test_fix, db_count_fix).
+# Si no están importados aún, el bloque de 'admin_fix' previo los define.
+
+@app.get("/admin/db-init", include_in_schema=False, tags=["admin"])
+def __admin_db_init_force__(request: Request):
+    return db_init_fix(request)
+
+@app.get("/admin/db-test", include_in_schema=False, tags=["admin"])
+def __admin_db_test_force__(request: Request):
+    return db_test_fix(request)
+
+@app.get("/admin/db-count", include_in_schema=False, tags=["admin"])
+def __admin_db_count_force__(request: Request):
+    return db_count_fix(request)
+# === /STARLINX ADMIN FORCE OVERRIDE ===
