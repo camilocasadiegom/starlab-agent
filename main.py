@@ -1,163 +1,293 @@
-﻿from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+﻿from fastapi import FastAPI, Request, Form, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.datastructures import URL
 from pathlib import Path
-import csv, os, io, json
+import csv, os, math, html
 from datetime import datetime
 
-app = FastAPI(title="STARLINX • Registro + Acceso")
+APP_TITLE = "STARLINX • Protoapp"
+app = FastAPI(title=APP_TITLE)
 
-# --- Sesiones (cookie) ---
-SECRET_KEY = os.getenv("SECRET_KEY", "starlab_dev_secret_change_me")
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, same_site="lax")
-
+# ==== Config ====
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 CSV_PATH = DATA_DIR / "registro.csv"
+FIELDS = ["timestamp","ip","nombre","documento","telefono","email","ciudad","vehiculo"]
 
-# crea encabezados si no existe
+ADMIN_KEY = os.getenv("ADMIN_KEY", "starlab123")
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+
+# Crear CSV con encabezados si no existe
 if not CSV_PATH.exists():
     with CSV_PATH.open("w", newline="", encoding="utf-8") as f:
-        csv.writer(f).writerow(["timestamp","nombre","documento","telefono"])
+        csv.writer(f).writerow(FIELDS)
 
-ADMIN_KEY = os.getenv("ADMIN_KEY", "starlab123")  # cambia esto luego
+# ==== Utilidades ====
+def is_admin(request: Request, k: str | None) -> bool:
+    if request.session.get("admin_ok"):
+        return True
+    if k and k == ADMIN_KEY:
+        return True
+    return False
 
-# ----------------- VISTAS -----------------
-HTML_FORM = """
-<html>
-  <head><meta charset="utf-8"><title>Registro STARLINX</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1"></head>
-  <body style="font-family:Arial, sans-serif; margin:30px; max-width:720px">
-    <h1>Registro de Conductores</h1>
-    <form method="post" action="/register" style="display:grid; gap:10px; max-width:420px">
-      <label>Nombre <input name="nombre" required></label>
-      <label>Documento <input name="documento" required></label>
-      <label>Teléfono <input name="telefono" required></label>
-      <button type="submit">Enviar</button>
-    </form>
-    <p style="margin-top:14px"><a href="/acceso">Acceso admin</a> · <a href="/docs">API Docs</a></p>
-  </body></html>
-"""
+def require_admin(request: Request, k: str | None):
+    if not is_admin(request, k):
+        raise HTTPException(status_code=401, detail="no autorizado")
 
-HTML_LOGIN = """
-<html>
-<head><meta charset="utf-8"><title>Acceso</title>
-<meta name="viewport" content="width=device-width, initial-scale=1"></head>
-<body style="font-family:Arial, sans-serif; margin:30px; max-width:520px">
-  <h1>Acceso administrador</h1>
-  <form method="post" action="/acceso" style="display:grid; gap:10px; max-width:320px">
-    <label>Clave <input name="clave" type="password" required></label>
-    <button type="submit">Entrar</button>
-  </form>
-  <p style="color:#666; margin-top:12px">Usa la clave de admin configurada en <code>ADMIN_KEY</code>.</p>
-  <p><a href="/">Volver</a></p>
-</body></html>
-"""
-
-def count_rows():
-    if not CSV_PATH.exists(): return 0
+def read_rows():
     with CSV_PATH.open("r", encoding="utf-8") as f:
-        r = list(csv.reader(f))
-    return max(0, len(r)-1)
+        reader = csv.DictReader(f)
+        return list(reader)
 
-# ----------------- RUTAS PÚBLICAS -----------------
+def append_row(row: dict):
+    # Asegurar orden de campos
+    out = [row.get(h, "") for h in FIELDS]
+    with CSV_PATH.open("a", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerow(out)
+
+def h(s: str) -> str:
+    return html.escape(str(s), quote=True)
+
+# ==== UI base ====
+BASE_CSS = """
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--accent:#0b5ed7;--muted:#6b7280}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);color:#111827}
+.container{max-width:920px;margin:24px auto;padding:0 16px}
+.card{background:var(--card);border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.06);padding:22px}
+a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+.btn{display:inline-block;background:var(--accent);color:#fff;padding:10px 14px;border-radius:10px;font-weight:600}
+.btn.muted{background:#e5e7eb;color:#111827}
+.grid{display:grid;gap:16px}
+@media(min-width:720px){.grid.cols-2{grid-template-columns:1fr 1fr}}
+label{display:block;font-size:14px;color:#111827;margin-bottom:6px}
+input,select{width:100%;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;background:#fff}
+table{border-collapse:collapse;width:100%} th,td{border:1px solid #e5e7eb;padding:8px 10px;font-size:14px}
+th{background:#fafafa;text-align:left}
+.pager{display:flex;gap:8px;margin-top:14px}
+.badge{background:#eef2ff;color:#1f3a8a;padding:2px 8px;border-radius:999px;font-size:12px}
+.muted{color:var(--muted)}
+</style>
+"""
+
+def page(title: str, body_html: str) -> HTMLResponse:
+    html_doc = f"""<!doctype html><html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{h(title)}</title>
+{BASE_CSS}
+</head><body>
+<div class="container">
+  <div class="card">
+    <h1 style="margin-top:0">{h(title)}</h1>
+    {body_html}
+  </div>
+  <p class="muted" style="margin-top:12px">{h(APP_TITLE)}</p>
+</div>
+</body></html>"""
+    return HTMLResponse(html_doc)
+
+# ==== Rutas públicas ====
 @app.get("/", response_class=HTMLResponse)
 def home():
-    return HTML_FORM
+    body = f"""
+    <div class="grid cols-2">
+      <div>
+        <h2>Bienvenido</h2>
+        <p>Usa el formulario para registrar conductores. El panel es solo para administradores.</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap">
+          <a class="btn" href="/registro">Registrar conductor</a>
+          <a class="btn muted" href="/acceso">Acceso admin</a>
+          <a class="btn muted" href="/panel">Panel</a>
+        </div>
+      </div>
+      <div>
+        <div class="badge">Atajo</div>
+        <p><a href="/docs">Ver API docs</a></p>
+      </div>
+    </div>
+    """
+    return page("Inicio", body)
 
-@app.post("/register")
-def register(nombre: str = Form(...), documento: str = Form(...), telefono: str = Form(...)):
+@app.get("/registro", response_class=HTMLResponse)
+def registro_form():
+    body = f"""
+    <form method="post" action="/registro" class="grid">
+      <div class="grid cols-2">
+        <div><label>Nombre</label><input name="nombre" required></div>
+        <div><label>Documento</label><input name="documento" required></div>
+      </div>
+      <div class="grid cols-2">
+        <div><label>Teléfono</label><input name="telefono" required></div>
+        <div><label>Email</label><input name="email" type="email"></div>
+      </div>
+      <div class="grid cols-2">
+        <div><label>Ciudad</label><input name="ciudad"></div>
+        <div><label>Tipo de vehículo</label>
+          <select name="vehiculo">
+            <option value="">(selecciona)</option>
+            <option>Sedan</option><option>SUV</option><option>Van</option>
+            <option>Premium</option><option>Otro</option>
+          </select>
+        </div>
+      </div>
+      <div><button class="btn" type="submit">Enviar registro</button></div>
+    </form>
+    """
+    return page("Registro de Conductores", body)
+
+@app.post("/registro")
+def registro_submit(request: Request,
+    nombre: str = Form(...),
+    documento: str = Form(...),
+    telefono: str = Form(...),
+    email: str = Form(""),
+    ciudad: str = Form(""),
+    vehiculo: str = Form("")
+):
     ts = datetime.now().isoformat(timespec="seconds")
-    with CSV_PATH.open("a", newline="", encoding="utf-8") as f:
-        csv.writer(f).writerow([ts, nombre, documento, telefono])
-    return JSONResponse({"ok": True, "ts": ts, "nombre": nombre})
+    ip = request.client.host if request.client else "-"
+    row = {
+        "timestamp": ts,
+        "ip": ip,
+        "nombre": nombre.strip(),
+        "documento": documento.strip(),
+        "telefono": telefono.strip(),
+        "email": email.strip(),
+        "ciudad": ciudad.strip(),
+        "vehiculo": vehiculo.strip(),
+    }
+    append_row(row)
+    return page("Registro recibido", f"""
+      <p><b>¡Gracias!</b> Tu registro fue guardado.</p>
+      <p><a class='btn' href='/registro'>Nuevo registro</a>
+         <a class='btn muted' href='/'>Inicio</a></p>
+    """)
+
+# Salud y ping (para pruebas / uptime)
+@app.get("/health")
+def health():
+    return {"ok": True, "service": "starlinx-protoapp"}
 
 @app.get("/ping")
 def ping():
     return JSONResponse({"pong": True})
 
-@app.get("/health")
-def health():
-    return {"status": "ok", "service": "starlinx-protoapp"}
-
-# ----------------- ACCESO / PANEL -----------------
-from fastapi.responses import RedirectResponse
-
+# ==== Acceso admin (sesión) ====
 @app.get("/acceso", response_class=HTMLResponse)
-def acceso_get(request: Request):
-    if request.session.get("auth") is True:
-        return RedirectResponse("/panel", status_code=303)
-    return HTML_LOGIN
+def acceso_form():
+    body = """
+    <form method="post" action="/acceso" class="grid">
+      <div><label>Clave de administrador</label><input name="k" type="password" required></div>
+      <div><button class="btn" type="submit">Entrar</button></div>
+    </form>
+    """
+    return page("Acceso administrador", body)
 
 @app.post("/acceso")
-def acceso_post(request: Request, clave: str = Form(...)):
-    if clave == ADMIN_KEY:
-        request.session["auth"] = True
+def acceso_login(request: Request, k: str = Form(...)):
+    if k == ADMIN_KEY:
+        request.session["admin_ok"] = True
         return RedirectResponse("/panel", status_code=303)
-    return HTMLResponse("<h3>Clave inválida</h3><p><a href='/acceso'>Volver</a></p>", status_code=401)
+    return page("Acceso administrador", "<p>Clave inválida.</p>" +
+                "<p><a class='btn muted' href='/acceso'>Volver</a></p>")
 
 @app.get("/salir")
 def salir(request: Request):
     request.session.clear()
-    return RedirectResponse("/acceso", status_code=303)
+    return RedirectResponse("/", status_code=303)
 
+# ==== Panel y registros (admin) ====
 @app.get("/panel", response_class=HTMLResponse)
-def panel(request: Request):
-    if request.session.get("auth") is not True:
-        return RedirectResponse("/acceso", status_code=303)
-    total = count_rows()
-    html = f"""
-    <html><head><meta charset='utf-8'><title>Panel</title></head>
-    <body style="font-family:Arial, sans-serif; margin:30px; max-width:720px">
-      <h1>Panel administrador</h1>
-      <p>Registros guardados: <b>{total}</b></p>
-      <p><a href="/registros">Ver registros</a> · <a href="/export.csv">Exportar CSV</a> · <a href="/export.json">Exportar JSON</a> · <a href="/salir">Salir</a></p>
-    </body></html>
+def panel(request: Request, k: str | None = None):
+    # permite sesión o ?k=
+    if not is_admin(request, k):
+        return page("Panel administrador", """
+          <p>Necesitas iniciar sesión o pasar la clave por URL.</p>
+          <p><a class='btn' href='/acceso'>Iniciar sesión</a></p>
+        """)
+    rows = read_rows()
+    body = f"""
+      <p>Registros guardados: <b>{len(rows)}</b></p>
+      <p>
+        <a class="btn" href="/registros">Ver registros</a>
+        <a class="btn muted" href="/export/csv">Exportar CSV</a>
+        <a class="btn muted" href="/export/json">Exportar JSON</a>
+        <a class="btn muted" href="/salir">Salir</a>
+      </p>
     """
-    return HTMLResponse(html)
+    return page("Panel administrador", body)
 
 @app.get("/registros", response_class=HTMLResponse)
-def registros(request: Request, k: str | None = None):
-    # Permite ver si hay sesión o si se pasa ?k=<ADMIN_KEY> (compatibilidad)
-    if not (request.session.get("auth") is True or (k == ADMIN_KEY)):
-        return RedirectResponse("/acceso", status_code=303)
-    rows = []
-    with CSV_PATH.open("r", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        rows = list(reader)
-    thead = "<tr>" + "".join(f"<th>{h}</th>" for h in rows[0]) + "</tr>"
-    trs = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows[1:])
-    html = f"""<html><head><meta charset="utf-8"><title>Registros</title>
-    <style>table{{border-collapse:collapse}} td,th{{border:1px solid #ddd;padding:6px}}</style></head>
-    <body style="font-family:Arial; margin:20px"><h2>Registros</h2>
-    <p><a href="/panel">Volver al panel</a></p>
-    <table>{thead}{trs}</table></body></html>"""
-    return HTMLResponse(html)
+def registros(request: Request, k: str | None = None, q: str | None = None, page_i: int | None = None, page: int = 1):
+    require_admin(request, k)
+    rows = read_rows()
 
-# ----------------- EXPORTS (protegidos) -----------------
-def _require_admin(request: Request, k: str | None):
-    if request.session.get("auth") is True: 
-        return True
-    if k == ADMIN_KEY:
-        return True
-    return False
+    # Búsqueda simple (en cualquier campo)
+    q = (q or "").strip().lower()
+    if q:
+        def match(r):
+            return any(q in (r.get(c,"").lower()) for c in FIELDS)
+        rows = list(filter(match, rows))
 
-@app.get("/export.csv")
+    # Paginación
+    per = 20
+    total = len(rows)
+    pages = max(1, math.ceil(total/per))
+    page = max(1, min(page, pages))
+    start = (page-1)*per
+    page_rows = rows[start:start+per]
+
+    # Tabla
+    headers_html = "".join(f"<th>{h(col)}</th>" for col in FIELDS)
+    trs = []
+    for r in page_rows:
+        tds = "".join(f"<td>{h(r.get(c,''))}</td>" for c in FIELDS)
+        trs.append(f"<tr>{tds}</tr>")
+    table_html = f"<table><thead><tr>{headers_html}</tr></thead><tbody>{''.join(trs) or '<tr><td colspan=\"99\">(sin datos)</td></tr>'}</tbody></table>"
+
+    # Paginador
+    base = str(URL(str(request.url)).replace_query_params())
+    def link(num): 
+        return str(URL(base).include_query_params(page=num))
+    pager = "<div class='pager'>" + " ".join(
+        f"<a class='btn muted' href='{h(link(i))}'>{i}</a>" for i in range(1, pages+1)
+    ) + "</div>"
+
+    body = f"""
+      <form method="get" class="grid" style="margin-bottom:10px">
+        <input type="hidden" name="page" value="1">
+        <div class="grid cols-2">
+          <div>
+            <label>Buscar (cualquier campo)</label>
+            <input name="q" value="{h(q)}" placeholder="nombre, documento, teléfono, email...">
+          </div>
+          <div style="align-self:end"><button class="btn" type="submit">Filtrar</button></div>
+        </div>
+      </form>
+      <p class="muted">Total: {total}</p>
+      {table_html}
+      {pager}
+      <p style="margin-top:12px">
+        <a class="btn muted" href="/export/csv">Exportar CSV</a>
+        <a class="btn muted" href="/export/json">Exportar JSON</a>
+        <a class="btn" href="/panel">Volver</a>
+      </p>
+    """
+    return page("Registros", body)
+
+# ==== Exportaciones ====
+@app.get("/export/csv")
 def export_csv(request: Request, k: str | None = None):
-    if not _require_admin(request, k):
-        raise HTTPException(status_code=401, detail="no autorizado")
-    with CSV_PATH.open("r", encoding="utf-8", newline="") as f:
+    require_admin(request, k)
+    with CSV_PATH.open("r", encoding="utf-8") as f:
         content = f.read()
-    # Forzar descarga
-    headers = {"Content-Disposition": 'attachment; filename="registro.csv"'}
-    return Response(content, media_type="text/csv; charset=utf-8", headers=headers)
+    return PlainTextResponse(content, media_type="text/csv", headers={
+        "Content-Disposition": 'attachment; filename="registros.csv"'
+    })
 
-@app.get("/export.json")
+@app.get("/export/json")
 def export_json(request: Request, k: str | None = None):
-    if not _require_admin(request, k):
-        raise HTTPException(status_code=401, detail="no autorizado")
-    out = []
-    with CSV_PATH.open("r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        out = list(reader)
-    return JSONResponse(out)
+    require_admin(request, k)
+    return JSONResponse(read_rows())
