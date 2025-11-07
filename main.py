@@ -3,8 +3,10 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.datastructures import URL
 from pathlib import Path
-import csv, os, math, html
-from datetime import datetime
+
+    param($m)
+    return $m.Value + 'DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/starlinx.db")' + "`r`n"
+  from datetime import datetime
 
 APP_TITLE = "STARLINX • Protoapp"
 app = FastAPI(title=APP_TITLE)
@@ -293,8 +295,10 @@ def export_json(request: Request, k: str | None = None):
     return JSONResponse(read_rows())
 # --------- [AUTO-ADD] Admin DB utilities (no rompe la UI existente) ----------
 try:
-    import os
-    from fastapi import HTTPException
+
+    param($m)
+    return $m.Value + 'DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/starlinx.db")' + "`r`n"
+      from fastapi import HTTPException
     from sqlalchemy import create_engine, text
 
     _ADMIN_KEY = os.getenv("ADMIN_KEY", "starlab123")
@@ -335,8 +339,7 @@ try:
             raise HTTPException(status_code=401, detail="no autorizado")
         url = os.getenv("DATABASE_URL")
         if not url:
-            raise HTTPException(status_code=400, detail="DATABASE_URL no está definido")
-        eng = _get_engine()
+            # NOTE: desactivado; ahora hay fallback a SQLiteeng = _get_engine()
         with eng.connect() as c:
             ver = c.execute(text("select version()")).scalar_one()
         return {"ok": True, "version": ver}
@@ -346,16 +349,20 @@ except Exception as _e:
 # ------------------------------------------------------------------------------
 # == STARLINX ADMIN DB ENDPOINTS (idempotente) ==
 from fastapi import HTTPException
-import os, sqlite3
 
+    param($m)
+    return $m.Value + 'DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/starlinx.db")' + "`r`n"
+  
 ADMIN_KEY = os.getenv("ADMIN_KEY", "starlab123")
 
 def _get_conn():
     dburl = os.getenv("DATABASE_URL", "")
     # Si hay Postgres, úsalo
     if dburl.startswith("postgres://") or dburl.startswith("postgresql://"):
-        import psycopg
-        return psycopg.connect(dburl)
+
+    param($m)
+    return $m.Value + 'DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/starlinx.db")' + "`r`n"
+          return psycopg.connect(dburl)
     # Fallback sqlite temporal (ej. en Render /tmp)
     return sqlite3.connect("/tmp/starlinx.db")
 
@@ -426,11 +433,15 @@ def admin_db_count(k: str):
 # === STARLINX DB FIX ROUTES ===
 from fastapi import APIRouter, HTTPException, Depends, Request
 from starlette.responses import JSONResponse
-import os
 
+    param($m)
+    return $m.Value + 'DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/starlinx.db")' + "`r`n"
+  
 try:
-    import db_fix
-except Exception as e:
+
+    param($m)
+    return $m.Value + 'DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/starlinx.db")' + "`r`n"
+  except Exception as e:
     # fallback por si el import falla
     db_fix = None
 
@@ -542,8 +553,10 @@ def __admin_db_count_force__(request: Request):
 
 # === STARLINX ADMIN SIMPLE ===
 # Admin endpoints mínimos: fuerzan SQLite en /tmp/starlinx.db
-import os, sqlite3, pathlib
-from fastapi import HTTPException, Request, Query
+
+    param($m)
+    return $m.Value + 'DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/starlinx.db")' + "`r`n"
+  from fastapi import HTTPException, Request, Query
 from fastapi.responses import JSONResponse
 
 ADMIN_KEY = os.getenv("ADMIN_KEY", "starlinx123")
@@ -616,10 +629,10 @@ def admin_db_count(request: Request, k: str | None = Query(default=None)):
 
 # === STARLINX STARTUP TABLE ENSURE ===
 # Asegurar tabla SQLite en /tmp/starlinx.db durante startup
-import os
-import sqlite3
-import pathlib
-from contextlib import closing
+
+    param($m)
+    return $m.Value + 'DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/starlinx.db")' + "`r`n"
+  from contextlib import closing
 
 DB_FILE = "/tmp/starlinx.db"
 
@@ -668,4 +681,5 @@ except Exception as e:
     print(f"[startup] Advertencia: no se pudo registrar evento startup: {e}")
     _ensure_sqlite_table()
 # === /STARLINX STARTUP TABLE ENSURE ===
+
 
