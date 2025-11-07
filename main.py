@@ -423,3 +423,73 @@ def admin_db_count(k: str):
     finally:
         con.close()
 # == /STARLINX ADMIN ==
+# === STARLINX DB FIX ROUTES ===
+from fastapi import APIRouter, HTTPException, Depends, Request
+from starlette.responses import JSONResponse
+import os
+
+try:
+    import db_fix
+except Exception as e:
+    # fallback por si el import falla
+    db_fix = None
+
+admin_fix = APIRouter(prefix="/admin/fix", tags=["admin-fix"])
+
+def _auth_ok(req: Request):
+    # acepta ?k=... o header X-Admin-Key (compatible con lo que ya usas)
+    kq = req.query_params.get("k")
+    kh = req.headers.get("X-Admin-Key")
+    admin_key = os.getenv("ADMIN_KEY", "starlab123")
+    return (kq == admin_key) or (kh == admin_key)
+
+@admin_fix.get("/db-init")
+def db_init_fix(request: Request):
+    if not _auth_ok(request):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    if db_fix is None:
+        raise HTTPException(status_code=500, detail="db_fix import failed")
+    try:
+        con = db_fix.connect_sqlite()
+        db_fix.ensure_table(con)
+        con.close()
+        return {"ok": True, "msg": "tabla creada (IF NOT EXISTS)", "driver": "sqlite", "path": db_fix.get_sqlite_path()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@admin_fix.get("/db-test")
+def db_test_fix(request: Request):
+    if not _auth_ok(request):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    if db_fix is None:
+        raise HTTPException(status_code=500, detail="db_fix import failed")
+    try:
+        path = db_fix.get_sqlite_path()
+        return {"driver": "sqlite", "path": path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@admin_fix.get("/db-count")
+def db_count_fix(request: Request):
+    if not _auth_ok(request):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    if db_fix is None:
+        raise HTTPException(status_code=500, detail="db_fix import failed")
+    try:
+        con = db_fix.connect_sqlite()
+        n = db_fix.count_rows(con)
+        if n is None:
+            # crear tabla automáticamente
+            db_fix.ensure_table(con)
+            n = 0
+        con.close()
+        return {"count": int(n)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Montar router en la app principal
+try:
+    app.include_router(admin_fix)
+except Exception:
+    pass
+# === /STARLINX DB FIX ROUTES ===
