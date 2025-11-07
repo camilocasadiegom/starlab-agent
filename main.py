@@ -541,75 +541,75 @@ def __admin_db_count_force__(request: Request):
 # === /STARLINX ADMIN FORCE OVERRIDE ===
 
 # === STARLINX ADMIN SIMPLE ===
-# Rutas /admin/* autocontenidas con SQLite para inicializar y testear BD.
-import os, sqlite3
-from fastapi import HTTPException, Request
+# Admin endpoints mínimos: fuerzan SQLite en /tmp/starlinx.db
+import os, sqlite3, pathlib
+from fastapi import HTTPException, Request, Query
+from fastapi.responses import JSONResponse
 
 ADMIN_KEY = os.getenv("ADMIN_KEY", "starlinx123")
-DB_URL    = os.getenv("DATABASE_URL", "sqlite:////tmp/starlinx.db")
+DB_FILE   = "/tmp/starlinx.db"
 
-def _check_admin(request: Request, k: str | None = None):
+def _check_admin(request: Request, k: str | None):
     key = k or request.headers.get("X-Admin-Key")
     if key != ADMIN_KEY:
         raise HTTPException(status_code=401, detail="no autorizado")
 
-def _db_path():
-    # Convierte DATABASE_URL tipo sqlite:* en ruta de archivo
-    url = DB_URL
-    if not url or not url.startswith("sqlite:"):
-        # fallback seguro
-        return "/tmp/starlinx.db"
-    # quita el prefijo "sqlite:"
-    raw = url.split("sqlite:", 1)[1]
-    # ej: "////tmp/starlinx.db" -> "/tmp/starlinx.db"
-    while raw.startswith("/"):
-        raw = raw[1:]
-    path = "/" + raw
-    d = os.path.dirname(path)
-    try:
-        os.makedirs(d, exist_ok=True)
-    except Exception:
-        pass
-    return path
+def _ensure_dir():
+    pathlib.Path("/tmp").mkdir(parents=True, exist_ok=True)
 
 def _conn():
-    return sqlite3.connect(_db_path(), check_same_thread=False)
+    _ensure_dir()
+    return sqlite3.connect(DB_FILE, check_same_thread=False)
 
 @app.get("/admin/db-test", tags=["admin"], include_in_schema=True)
-def admin_db_test(request: Request, k: str | None = None):
-    _check_admin(request, k)
-    if DB_URL.startswith("sqlite"):
-        return {"driver":"sqlite","path": _db_path()}
-    return {"driver":"unknown","url": DB_URL}
+def admin_db_test(request: Request, k: str | None = Query(default=None)):
+    try:
+        _check_admin(request, k)
+        exists = os.path.exists(DB_FILE)
+        return {"driver":"sqlite","file":DB_FILE,"exists":exists}
+    except HTTPException:
+        raise
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/admin/db-init", tags=["admin"], include_in_schema=True)
-def admin_db_init(request: Request, k: str | None = None):
-    _check_admin(request, k)
-    with _conn() as c:
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS registros (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          nombre   TEXT,
-          documento TEXT,
-          telefono TEXT,
-          email    TEXT,
-          ciudad   TEXT,
-          vehiculo TEXT,
-          ts       TEXT
-        )""")
-        c.commit()
-    return {"ok": True, "msg": "tabla creada (IF NOT EXISTS)", "db": _db_path()}
+def admin_db_init(request: Request, k: str | None = Query(default=None)):
+    try:
+        _check_admin(request, k)
+        with _conn() as c:
+            c.execute("""
+            CREATE TABLE IF NOT EXISTS registros (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              nombre   TEXT,
+              documento TEXT,
+              telefono TEXT,
+              email    TEXT,
+              ciudad   TEXT,
+              vehiculo TEXT,
+              ts       TEXT
+            )""")
+            c.commit()
+        return {"ok": True, "msg": "tabla creada (IF NOT EXISTS)", "file": DB_FILE}
+    except HTTPException:
+        raise
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/admin/db-count", tags=["admin"], include_in_schema=True)
-def admin_db_count(request: Request, k: str | None = None):
-    _check_admin(request, k)
+def admin_db_count(request: Request, k: str | None = Query(default=None)):
     try:
+        _check_admin(request, k)
         with _conn() as c:
-            cur = c.execute("SELECT COUNT(*) FROM registros")
-            n = cur.fetchone()[0]
-        return {"count": int(n)}
-    except sqlite3.OperationalError:
-        # tabla no existe aún
-        return {"count": 0, "note": "tabla no existe aún; ejecuta /admin/db-init", "db": _db_path()}
+            try:
+                cur = c.execute("SELECT COUNT(*) FROM registros")
+                n = cur.fetchone()[0]
+                return {"count": int(n), "file": DB_FILE}
+            except sqlite3.OperationalError:
+                return {"count": 0, "note": "tabla no existe aún; ejecuta /admin/db-init", "file": DB_FILE}
+    except HTTPException:
+        raise
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 # === /STARLINX ADMIN SIMPLE ===
+
 
