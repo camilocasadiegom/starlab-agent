@@ -615,40 +615,57 @@ def admin_db_count(request: Request, k: str | None = Query(default=None)):
 
 
 # === STARLINX STARTUP TABLE ENSURE ===
-# Forzar tabla en arranque, usando SQLite en /tmp/starlinx.db
-import os, sqlite3, pathlib
+# Asegurar tabla SQLite en /tmp/starlinx.db durante startup
+import os
+import sqlite3
+import pathlib
 from contextlib import closing
 
 DB_FILE = "/tmp/starlinx.db"
 
 def _ensure_sqlite_table():
+    """Crea la tabla registros si no existe en SQLite."""
     try:
+        # Asegurar directorio /tmp
         pathlib.Path("/tmp").mkdir(parents=True, exist_ok=True)
-        with closing(sqlite3.connect(DB_FILE, check_same_thread=False)) as c:
-            c.execute(\"\"\"
-            CREATE TABLE IF NOT EXISTS registros (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              nombre   TEXT,
-              documento TEXT,
-              telefono TEXT,
-              email    TEXT,
-              ciudad   TEXT,
-              vehiculo TEXT,
-              ts       TEXT
+        
+        # Crear/verificar tabla
+        with closing(sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS registros (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre TEXT NOT NULL,
+                    documento TEXT,
+                    telefono TEXT,
+                    email TEXT,
+                    ciudad TEXT,
+                    vehiculo TEXT,
+                    ts TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+            """)
+            conn.commit()
+            
+            # Verificar tabla creada
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='registros'"
             )
-            \"\"\")
-            c.commit()
+            if cursor.fetchone():
+                print("[startup] ✓ Tabla 'registros' verificada en SQLite")
+            else:
+                print("[startup] ✗ Error: tabla 'registros' no se pudo crear")
+                
     except Exception as e:
-        # No rompemos el arranque; solo dejamos pista en logs
-        print(f"[startup] tabla registros: {e}")
+        print(f"[startup] ✗ Error al crear tabla registros: {e}")
+        # No lanzar excepción para no romper el arranque
 
-# FastAPI >=0.95 sugiere lifespan/Events; este decorador funciona en ambas
+# Registrar en evento de startup de FastAPI
 try:
     @app.on_event("startup")
-    def _starlinx_startup_ensure_table():
+    async def startup_ensure_table():
         _ensure_sqlite_table()
-except Exception as _e:
-    # Si ya hay un lifespan distinto, llamamos de inmediato (degradado)
+except Exception as e:
+    # Si falla el decorador, ejecutar inmediatamente (fallback)
+    print(f"[startup] Advertencia: no se pudo registrar evento startup: {e}")
     _ensure_sqlite_table()
 # === /STARLINX STARTUP TABLE ENSURE ===
 
