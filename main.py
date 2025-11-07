@@ -493,3 +493,30 @@ try:
 except Exception:
     pass
 # === /STARLINX DB FIX ROUTES ===
+# === STARLINX ADMIN ALIASES ===
+from fastapi import Request, HTTPException
+
+def _path_registered(app, path, method):
+    try:
+        for r in app.router.routes:
+            if getattr(r, "path", None) == path and method.upper() in getattr(r, "methods", set()):
+                return True
+    except Exception:
+        pass
+    return False
+
+if not _path_registered(app, "/admin/db-init", "GET"):
+    @app.get("/admin/db-init", tags=["admin"])
+    def _admin_db_init_alias(request: Request):
+        return db_init_fix(request)
+
+if not _path_registered(app, "/admin/db-test", "GET"):
+    @app.get("/admin/db-test", tags=["admin"])
+    def _admin_db_test_alias(request: Request):
+        return db_test_fix(request)
+
+if not _path_registered(app, "/admin/db-count", "GET"):
+    @app.get("/admin/db-count", tags=["admin"])
+    def _admin_db_count_alias(request: Request):
+        return db_count_fix(request)
+# === /STARLINX ADMIN ALIASES ===
