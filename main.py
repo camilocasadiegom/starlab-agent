@@ -1,9 +1,7 @@
-﻿from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
-from starlette.middleware.sessions import SessionMiddleware
-from starlette.datastructures import URL
-from pathlib import Path
-
+﻿
+    param($m)
+    return $m.Value + "import os`n"
+  
     param($m)
     return $m.Value + 'DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/starlinx.db")' + "`r`n"
   from datetime import datetime
@@ -348,8 +346,10 @@ except Exception as _e:
     pass
 # ------------------------------------------------------------------------------
 # == STARLINX ADMIN DB ENDPOINTS (idempotente) ==
-from fastapi import HTTPException
 
+    param($m)
+    return $m.Value + "import os`n"
+  
     param($m)
     return $m.Value + 'DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/starlinx.db")' + "`r`n"
   
@@ -431,9 +431,10 @@ def admin_db_count(k: str):
         con.close()
 # == /STARLINX ADMIN ==
 # === STARLINX DB FIX ROUTES ===
-from fastapi import APIRouter, HTTPException, Depends, Request
-from starlette.responses import JSONResponse
 
+    param($m)
+    return $m.Value + "import os`n"
+  
     param($m)
     return $m.Value + 'DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/starlinx.db")' + "`r`n"
   
@@ -505,8 +506,10 @@ except Exception:
     pass
 # === /STARLINX DB FIX ROUTES ===
 # === STARLINX ADMIN ALIASES ===
-from fastapi import Request, HTTPException
 
+    param($m)
+    return $m.Value + "import os`n"
+  
 def _path_registered(app, path, method):
     try:
         for r in app.router.routes:
@@ -533,8 +536,10 @@ if not _path_registered(app, "/admin/db-count", "GET"):
 # === /STARLINX ADMIN ALIASES ===
 # === STARLINX ADMIN FORCE OVERRIDE ===
 # Fuerza a que /admin/* llamen a los handlers robustos de /admin/fix/*
-from fastapi import Request
 
+    param($m)
+    return $m.Value + "import os`n"
+  
 # Nos aseguramos de que existen los fix handlers (db_init_fix, db_test_fix, db_count_fix).
 # Si no están importados aún, el bloque de 'admin_fix' previo los define.
 
@@ -557,8 +562,10 @@ def __admin_db_count_force__(request: Request):
     param($m)
     return $m.Value + 'DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/starlinx.db")' + "`r`n"
   from fastapi import HTTPException, Request, Query
-from fastapi.responses import JSONResponse
 
+    param($m)
+    return $m.Value + "import os`n"
+  
 ADMIN_KEY = os.getenv("ADMIN_KEY", "starlinx123")
 DB_FILE   = "/tmp/starlinx.db"
 
@@ -681,5 +688,6 @@ except Exception as e:
     print(f"[startup] Advertencia: no se pudo registrar evento startup: {e}")
     _ensure_sqlite_table()
 # === /STARLINX STARTUP TABLE ENSURE ===
+
 
 
