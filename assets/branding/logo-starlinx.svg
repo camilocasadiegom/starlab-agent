@@ -1,0 +1,20 @@
+﻿<svg width="720" height="200" viewBox="0 0 720 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#062F67"/>
+      <stop offset="100%" stop-color="#0B4FA0"/>
+    </linearGradient>
+  </defs>
+  <rect width="720" height="200" fill="white"/>
+  <!-- Monograma SLX -->
+  <g transform="translate(28,30)">
+    <rect rx="16" width="140" height="140" fill="url(#g)"/>
+    <path d="M30 60 C30 45 45 35 62 35 L100 35 L100 50 L62 50 C55 50 50 54 50 60 C50 66 55 70 62 70 L82 70 C99 70 114 80 114 95 C114 111 99 121 82 121 L30 121 L30 106 L82 106 C89 106 94 102 94 95 C94 88 89 84 82 84 L62 84 C45 84 30 75 30 60 Z" fill="#FFFFFF"/>
+    <path d="M110 35 L135 60 L110 84 L95 70 L108 58 L95 46 Z" fill="#F5B301"/>
+  </g>
+  <!-- Wordmark -->
+  <g transform="translate(200,55)">
+    <text x="0" y="55" font-family="Inter, system-ui, Segoe UI, Arial" font-size="64" font-weight="800" fill="url(#g)">STARLINX</text>
+    <text x="4" y="95" font-family="Inter, system-ui, Segoe UI, Arial" font-size="18" font-weight="600" fill="#6B7280">AI Agent for Mobility • by STARLAB</text>
+  </g>
+</svg>
